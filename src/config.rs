@@ -30,12 +30,26 @@ pub struct GitlabConfig {
     pub token_expiry: Duration,
     #[serde(default)]
     pub ssl_cert: Option<String>,
+    #[serde(default = "GitlabConfig::default_cache_capacity")]
+    pub cache_capacity: u64,
+    #[serde(default = "GitlabConfig::default_cache_ttl")]
+    pub cache_ttl: Duration,
 }
 
 impl GitlabConfig {
     #[must_use]
     const fn default_token_expiry() -> Duration {
         Duration::days(30)
+    }
+
+    #[must_use]
+    const fn default_cache_capacity() -> u64 {
+        1024
+    }
+
+    #[must_use]
+    const fn default_cache_ttl() -> Duration {
+        Duration::minutes(15)
     }
 }
 

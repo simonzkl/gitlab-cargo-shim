@@ -4,6 +4,7 @@ use crate::config::GitlabConfig;
 use crate::providers::{Release, User};
 use async_trait::async_trait;
 use futures::{stream::FuturesUnordered, StreamExt, TryStreamExt};
+use http_cache_reqwest::{Cache, CacheMode, HttpCache, HttpCacheOptions, MokaManager};
 use percent_encoding::{utf8_percent_encode, NON_ALPHANUMERIC};
 use reqwest::{header, Certificate};
 use serde::{Deserialize, Serialize};
@@ -13,7 +14,7 @@ use tracing::{info_span, instrument, Instrument};
 use url::Url;
 
 pub struct Gitlab {
-    client: reqwest::Client,
+    client: reqwest_middleware::ClientWithMiddleware,
     base_url: Url,
     token_expiry: Duration,
     ssl_cert: Option<Certificate>,
@@ -39,8 +40,20 @@ impl Gitlab {
             _ => None,
         };
 
+        let cache = moka::future::CacheBuilder::new(config.cache_capacity)
+            .time_to_live(config.cache_ttl.try_into()?)
+            .build();
+
+        let cache_client = reqwest_middleware::ClientBuilder::new(client_builder.build()?)
+            .with(Cache(HttpCache {
+                mode: CacheMode::Default,
+                manager: MokaManager::new(cache),
+                options: HttpCacheOptions::default(),
+            }))
+            .build();
+
         Ok(Self {
-            client: client_builder.build()?,
+            client: cache_client,
             base_url: config.uri.join("api/v4/")?,
             token_expiry: config.token_expiry,
             ssl_cert,
